@@ -14,7 +14,7 @@ export const STOP_TYPES = [
 ];
 
 /* ===============================
-   GENERATE STOPS AROUND A POSITION
+   GENERATE STOPS FOR A GRID CELL
 =============================== */
 
 function seededRandom(seed) {
@@ -22,29 +22,38 @@ function seededRandom(seed) {
   return x - Math.floor(x);
 }
 
-export function generateStops(centerLat, centerLng, count = 8) {
+// Generate stops for a specific ~1km grid cell
+export function generateStopsForCell(cellLat, cellLng, count = 4) {
   const stops = [];
-  // Grid seed based on rough position (consistent stops for same area)
-  const baseSeed = Math.floor(centerLat * 1000) * 10000 + Math.floor(centerLng * 1000);
+  const baseSeed = Math.floor(cellLat * 100) * 10000 + Math.floor(cellLng * 100);
 
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2 + seededRandom(baseSeed + i) * 0.8;
-    const distance = 0.0020 + seededRandom(baseSeed + i + 100) * 0.0010; // ~220m to ~330m (around 250m)
-    const lat = centerLat + Math.sin(angle) * distance;
-    const lng = centerLng + Math.cos(angle) * distance;
+    // Spread them across the ~1km cell
+    const distance = 0.0010 + seededRandom(baseSeed + i + 100) * 0.0040; 
+    const lat = cellLat + Math.sin(angle) * distance;
+    const lng = cellLng + Math.cos(angle) * distance;
     const typeIdx = Math.floor(seededRandom(baseSeed + i + 200) * STOP_TYPES.length);
 
     stops.push({
-      id: `stop-${i}`,
+      id: `stop-${cellLat}-${cellLng}-${i}`,
       lat,
       lng,
       type: STOP_TYPES[typeIdx],
-      cooldownUntil: 0, // timestamp when cooldown expires
+      cooldownUntil: 0, 
       collected: false,
     });
   }
 
   return stops;
+}
+
+// Determine which grid cell a coordinate is in (approx 1km cells)
+export function getGridCell(lat, lng) {
+  return {
+    cellLat: Math.floor(lat * 100) / 100,
+    cellLng: Math.floor(lng * 100) / 100
+  };
 }
 
 /* ===============================

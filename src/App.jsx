@@ -14,7 +14,7 @@ import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 import NeonTrailLayer from "./NeonTrailLayer";
-import PowerStops, { generateStops, getDistanceMeters, STOP_TYPES } from "./PowerStops";
+import PowerStops, { generateStopsForCell, getGridCell, getDistanceMeters, STOP_TYPES } from "./PowerStops";
 
 import "leaflet/dist/leaflet.css";
 import "./App.css";
@@ -197,7 +197,11 @@ function ExplorerPage({
               fillColor: activeEffects.speed > Date.now() ? "#ffee00" : "#00f3ff",
               fillOpacity: 1
             }}
-          />
+          >
+            <Tooltip permanent direction="top" className="player-label" offset={[0, -10]}>
+              🟦 YOU
+            </Tooltip>
+          </CircleMarker>
         )}
 
         {/* ENEMY DOTS */}
@@ -213,7 +217,11 @@ function ExplorerPage({
                 fillColor: "#ff0055",
                 fillOpacity: 1
               }}
-            />
+            >
+              <Tooltip permanent direction="top" className="player-label" offset={[0, -10]}>
+                🟥 Player #{String(p.userId).slice(-4)}
+              </Tooltip>
+            </CircleMarker>
           ))}
 
       </MapContainer>
@@ -335,6 +343,7 @@ export default function App() {
 
   // Power-up stops & quests
   const [powerStops, setPowerStops] = useState([]);
+  const [visitedCells, setVisitedCells] = useState(new Set()); // Track ~1km grid cells we've spawned stops in
   const [inventory, setInventory] = useState({ speed: 0, shield: 0, double: 0, expand: 0, xp: 0 });
   const [activeEffects, setActiveEffects] = useState({ speed: 0, shield: 0, double: 0, expand: 0 });
   const [quests, setQuests] = useState([
@@ -940,12 +949,47 @@ POWER-UP STOP COLLECTION
     }, 3000);
   }, []);
 
-  // Generate stops when we get first GPS position
+  // Dynamically generate stops as the player moves into new ~1km grid cells
   useEffect(() => {
-    if (userPos && !stopsGenerated.current) {
-      stopsGenerated.current = true;
-      setPowerStops(generateStops(userPos[0], userPos[1], 8));
+    if (!userPos) return;
+
+    const currentCell = getGridCell(userPos[0], userPos[1]);
+    const cellKey = `${currentCell.cellLat},${currentCell.cellLng}`;
+
+    // Also check neighboring 8 cells so we spawn them before we reach them
+    const neighbors = [
+      [0, 0], [0, 0.01], [0, -0.01],
+      [0.01, 0], [0.01, 0.01], [0.01, -0.01],
+      [-0.01, 0], [-0.01, 0.01], [-0.01, -0.01]
+    ];
+
+    let newStops = [];
+    let updatedCells = new Set(visitedCells);
+    let cellsAdded = false;
+
+    for (const [latOffset, lngOffset] of neighbors) {
+      const nLat = currentCell.cellLat + latOffset;
+      const nLng = currentCell.cellLng + lngOffset;
+      // Use toFixed to avoid precision issues in keys
+      const nKey = `${nLat.toFixed(2)},${nLng.toFixed(2)}`;
+
+      if (!updatedCells.has(nKey)) {
+        updatedCells.add(nKey);
+        cellsAdded = true;
+        // Generate 4 stops per ~1km block
+        newStops = [...newStops, ...generateStopsForCell(nLat, nLng, 4)];
+      }
     }
+
+    if (cellsAdded) {
+      setVisitedCells(updatedCells);
+      setPowerStops(prev => {
+        // Keep existing stops (to preserve cooldown states), just concat new ones.
+        // Optional: filter out stops that are extremely far away to save memory if needed later.
+        return [...prev, ...newStops];
+      });
+    }
+
   }, [userPos]);
 
   // Check proximity to stops every time position updates
@@ -1058,6 +1102,8 @@ RESET
     });
 
     setDistance(0);
+    setVisitedCells(new Set());
+    setPowerStops([]);
 
   }
 
