@@ -1102,8 +1102,6 @@ RESET
     });
 
     setDistance(0);
-    setVisitedCells(new Set());
-    setPowerStops([]);
 
   }
 
