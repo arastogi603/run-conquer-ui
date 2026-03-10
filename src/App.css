@@ -259,3 +259,328 @@ html, body, #root {
 .territory-tooltip::before {
   border-top-color: rgba(0, 0, 0, 0.85) !important;
 }
+
+/* ========================================
+   QUEST PANEL - LEFT SIDE
+   ======================================== */
+
+.quest-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+}
+
+.quest-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 243, 255, 0.3);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.1);
+}
+
+.quest-toggle:hover {
+  border-color: #00f3ff;
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
+}
+
+.quest-list {
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 243, 255, 0.2);
+  border-radius: 14px;
+  padding: 14px;
+  width: 220px;
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.1);
+  animation: slideIn 0.25s ease-out;
+}
+
+.quest-panel-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #00f3ff;
+  letter-spacing: 3px;
+  text-align: center;
+  margin-bottom: 10px;
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+}
+
+.quest-item {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: rgba(0, 243, 255, 0.04);
+  border: 1px solid rgba(0, 243, 255, 0.1);
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.quest-item:last-child {
+  margin-bottom: 0;
+}
+
+.quest-done {
+  border-color: rgba(0, 255, 100, 0.3);
+  background: rgba(0, 255, 100, 0.06);
+}
+
+.quest-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.quest-emoji {
+  font-size: 14px;
+}
+
+.quest-name {
+  font-family: 'Orbitron', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.quest-desc {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 6px;
+}
+
+.quest-progress-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+
+.quest-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00f3ff, #00ff88);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
+}
+
+.quest-done .quest-progress-fill {
+  background: linear-gradient(90deg, #00ff88, #44ff44);
+}
+
+.quest-progress-text {
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  color: rgba(0, 243, 255, 0.6);
+  text-align: right;
+}
+
+.quest-done .quest-progress-text {
+  color: #00ff64;
+}
+
+.quest-reward {
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  color: #ffee00;
+  margin-top: 4px;
+  text-shadow: 0 0 6px rgba(255, 238, 0, 0.5);
+}
+
+/* ========================================
+   INVENTORY BAR - BOTTOM LEFT
+   ======================================== */
+
+.inventory-bar {
+  position: absolute;
+  bottom: 20px;
+  left: 16px;
+  z-index: 1000;
+  display: flex;
+  gap: 6px;
+}
+
+.inv-item {
+  width: 44px;
+  height: 52px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  padding: 0;
+}
+
+.inv-item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.inv-has {
+  border-color: rgba(0, 243, 255, 0.3);
+  background: rgba(0, 243, 255, 0.08);
+  opacity: 1 !important;
+}
+
+.inv-has:hover {
+  border-color: #00f3ff;
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.inv-active {
+  border-color: #ffee00 !important;
+  background: rgba(255, 238, 0, 0.15) !important;
+  box-shadow: 0 0 16px rgba(255, 238, 0, 0.3) !important;
+  animation: invPulse 1.5s ease-in-out infinite;
+}
+
+.inv-emoji {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.inv-count {
+  font-family: 'Orbitron', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.inv-has .inv-count {
+  color: #00f3ff;
+}
+
+.inv-active-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffee00;
+  box-shadow: 0 0 6px #ffee00;
+}
+
+/* ========================================
+   TOAST NOTIFICATIONS
+   ======================================== */
+
+.toast-container {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 243, 255, 0.3);
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  animation: toastIn 0.4s ease-out, toastOut 0.4s ease-in 2.6s;
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
+}
+
+.toast-collect {
+  border-color: rgba(0, 255, 136, 0.4);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
+}
+
+.toast-quest {
+  border-color: rgba(255, 238, 0, 0.5);
+  color: #ffee00;
+  box-shadow: 0 0 20px rgba(255, 238, 0, 0.3);
+  text-shadow: 0 0 8px rgba(255, 238, 0, 0.4);
+}
+
+.toast-activate {
+  border-color: rgba(204, 68, 255, 0.4);
+  box-shadow: 0 0 20px rgba(204, 68, 255, 0.2);
+}
+
+.toast-xp {
+  border-color: rgba(0, 204, 255, 0.4);
+  box-shadow: 0 0 20px rgba(0, 204, 255, 0.3);
+}
+
+/* ========================================
+   STOP TOOLTIP STYLES
+   ======================================== */
+
+.stop-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.stop-tooltip::before {
+  display: none !important;
+}
+
+.stop-cooldown {
+  opacity: 0.3;
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
+@keyframes invPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 238, 0, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(255, 238, 0, 0.5); }
+}
+
+@keyframes stopPulse {
+  0%, 100% { r: 18; opacity: 0.4; }
+  50% { r: 22; opacity: 0.1; }
+}

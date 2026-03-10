@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 
 import {
@@ -14,6 +14,7 @@ import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 import NeonTrailLayer from "./NeonTrailLayer";
+import PowerStops, { generateStops, getDistanceMeters, STOP_TYPES } from "./PowerStops";
 
 import "leaflet/dist/leaflet.css";
 import "./App.css";
@@ -48,7 +49,16 @@ function ExplorerPage({
   distance,
   speed,
   resetSession,
-  wsStatus
+  wsStatus,
+  powerStops,
+  inventory,
+  quests,
+  activeEffects,
+  onCollectStop,
+  onUseItem,
+  toasts,
+  questPanelOpen,
+  setQuestPanelOpen
 }) {
 
   const territoryCount = (territories[userId] || []).length;
@@ -97,6 +107,69 @@ function ExplorerPage({
 
       </div>
 
+      {/* QUEST PANEL - LEFT SIDE */}
+      <div className={`quest-panel ${questPanelOpen ? 'open' : ''}`}>
+        <button className="quest-toggle" onClick={() => setQuestPanelOpen(!questPanelOpen)}>
+          {questPanelOpen ? '✕' : '📜'}
+        </button>
+        {questPanelOpen && (
+          <div className="quest-list">
+            <div className="quest-panel-title">QUESTS</div>
+            {quests.map((q, i) => (
+              <div key={i} className={`quest-item ${q.completed ? 'quest-done' : ''}`}>
+                <div className="quest-header">
+                  <span className="quest-emoji">{q.emoji}</span>
+                  <span className="quest-name">{q.name}</span>
+                </div>
+                <div className="quest-desc">{q.description}</div>
+                <div className="quest-progress-bar">
+                  <div
+                    className="quest-progress-fill"
+                    style={{ width: `${Math.min(100, (q.progress / q.target) * 100)}%` }}
+                  />
+                </div>
+                <div className="quest-progress-text">
+                  {q.completed ? '✅ COMPLETE' : `${Math.floor(q.progress)} / ${q.target}`}
+                </div>
+                {q.completed && !q.claimed && (
+                  <div className="quest-reward">🎁 {q.rewardEmoji} {q.rewardLabel}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* INVENTORY BAR - BOTTOM LEFT */}
+      <div className="inventory-bar">
+        {STOP_TYPES.map(type => {
+          const count = inventory[type.id] || 0;
+          const isActive = activeEffects[type.id] > Date.now();
+          return (
+            <button
+              key={type.id}
+              className={`inv-item ${count > 0 ? 'inv-has' : ''} ${isActive ? 'inv-active' : ''}`}
+              title={`${type.label}${count > 0 ? ' (tap to use)' : ''}`}
+              onClick={() => count > 0 && onUseItem(type.id)}
+              disabled={count === 0 || isActive}
+            >
+              <span className="inv-emoji">{type.emoji}</span>
+              <span className="inv-count">{count}</span>
+              {isActive && <span className="inv-active-dot" />}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* TOAST NOTIFICATIONS */}
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast toast-${t.type}`}>
+            {t.message}
+          </div>
+        ))}
+      </div>
+
       <MapContainer
         center={userPos || [28.6139, 77.209]}
         zoom={17}
@@ -111,14 +184,17 @@ function ExplorerPage({
         {/* CANVAS NEON TRAILS & TERRITORIES */}
         <NeonTrailLayer trails={trails} territories={territories} />
 
+        {/* POWER-UP STOPS */}
+        <PowerStops stops={powerStops} userPos={userPos} onCollect={onCollectStop} />
+
         {/* PLAYER DOT */}
         {userPos && (
           <CircleMarker
             center={userPos}
-            radius={8}
+            radius={activeEffects.expand > Date.now() ? 14 : 8}
             pathOptions={{
               color: "#ffffff",
-              fillColor: "#00f3ff",
+              fillColor: activeEffects.speed > Date.now() ? "#ffee00" : "#00f3ff",
               fillOpacity: 1
             }}
           />
@@ -256,6 +332,19 @@ export default function App() {
   const [distance, setDistance] = useState(0);
   const [speed, setSpeed] = useState(0);
   const [wsStatus, setWsStatus] = useState('connecting');
+
+  // Power-up stops & quests
+  const [powerStops, setPowerStops] = useState([]);
+  const [inventory, setInventory] = useState({ speed: 0, shield: 0, double: 0, expand: 0, xp: 0 });
+  const [activeEffects, setActiveEffects] = useState({ speed: 0, shield: 0, double: 0, expand: 0 });
+  const [quests, setQuests] = useState([
+    { name: "Trail Blazer", emoji: "🏃", description: "Walk 500m", target: 500, progress: 0, completed: false, claimed: false, rewardType: "speed", rewardEmoji: "⚡", rewardLabel: "Speed Boost" },
+    { name: "Conqueror", emoji: "🏴", description: "Capture 2 territories", target: 2, progress: 0, completed: false, claimed: false, rewardType: "shield", rewardEmoji: "🛡️", rewardLabel: "Shield" },
+    { name: "Explorer", emoji: "📍", description: "Visit 3 power-up stops", target: 3, progress: 0, completed: false, claimed: false, rewardType: "double", rewardEmoji: "💥", rewardLabel: "Double Capture" },
+  ]);
+  const [toasts, setToasts] = useState([]);
+  const [questPanelOpen, setQuestPanelOpen] = useState(false);
+  const stopsGenerated = useRef(false);
 
   const stompClient = useRef(null);
   const userId = useRef(Math.floor(Math.random() * 100000)).current;
@@ -840,6 +929,117 @@ POSITION HEARTBEAT — Keep player visible to others
   }, [userId, userPos]);
 
   /* ===============================
+POWER-UP STOP COLLECTION
+=============================== */
+
+  const addToast = useCallback((message, type = 'collect') => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3000);
+  }, []);
+
+  // Generate stops when we get first GPS position
+  useEffect(() => {
+    if (userPos && !stopsGenerated.current) {
+      stopsGenerated.current = true;
+      setPowerStops(generateStops(userPos[0], userPos[1], 8));
+    }
+  }, [userPos]);
+
+  // Check proximity to stops every time position updates
+  useEffect(() => {
+    if (!userPos || powerStops.length === 0) return;
+    const now = Date.now();
+
+    let collected = false;
+    const updatedStops = powerStops.map(stop => {
+      if (now < stop.cooldownUntil) return stop; // On cooldown
+      const dist = getDistanceMeters(userPos[0], userPos[1], stop.lat, stop.lng);
+      if (dist < 25) {
+        collected = true;
+        // Add to inventory
+        setInventory(prev => ({ ...prev, [stop.type.id]: (prev[stop.type.id] || 0) + 1 }));
+
+        // XP bonus is instant
+        if (stop.type.id === 'xp') {
+          setDistance(d => d + 50);
+          addToast(`⭐ +50m XP BONUS!`, 'xp');
+        } else {
+          addToast(`${stop.type.emoji} ${stop.type.label} collected!`, 'collect');
+        }
+
+        // Update quest: Explorer (visit stops)
+        setQuests(prev => prev.map(q => {
+          if (q.name === 'Explorer' && !q.completed) {
+            const newProgress = q.progress + 1;
+            const done = newProgress >= q.target;
+            if (done) {
+              addToast(`📜 Quest Complete: ${q.name}!`, 'quest');
+              setInventory(inv => ({ ...inv, [q.rewardType]: (inv[q.rewardType] || 0) + 1 }));
+            }
+            return { ...q, progress: newProgress, completed: done, claimed: done };
+          }
+          return q;
+        }));
+
+        return { ...stop, cooldownUntil: now + 60000 }; // 60s cooldown
+      }
+      return stop;
+    });
+
+    if (collected) {
+      setPowerStops(updatedStops);
+    }
+  }, [userPos, powerStops, addToast]);
+
+  // Track distance quest
+  useEffect(() => {
+    setQuests(prev => prev.map(q => {
+      if (q.name === 'Trail Blazer' && !q.completed) {
+        const newProgress = distance / 1000 * 1000; // distance is in meters already
+        const done = newProgress >= q.target;
+        if (done && !q.completed) {
+          addToast(`📜 Quest Complete: ${q.name}!`, 'quest');
+          setInventory(inv => ({ ...inv, [q.rewardType]: (inv[q.rewardType] || 0) + 1 }));
+        }
+        return { ...q, progress: Math.min(newProgress, q.target), completed: done, claimed: done };
+      }
+      return q;
+    }));
+  }, [distance, addToast]);
+
+  // Track territory quest
+  useEffect(() => {
+    const myTerritories = territories[userId] || [];
+    setQuests(prev => prev.map(q => {
+      if (q.name === 'Conqueror' && !q.completed) {
+        const newProgress = myTerritories.length;
+        const done = newProgress >= q.target;
+        if (done && !q.completed) {
+          addToast(`📜 Quest Complete: ${q.name}!`, 'quest');
+          setInventory(inv => ({ ...inv, [q.rewardType]: (inv[q.rewardType] || 0) + 1 }));
+        }
+        return { ...q, progress: newProgress, completed: done, claimed: done };
+      }
+      return q;
+    }));
+  }, [territories, userId, addToast]);
+
+  // Use a power-up item
+  function useItem(typeId) {
+    if (typeId === 'xp') return; // XP is instant, can't be "used"
+    setInventory(prev => {
+      if ((prev[typeId] || 0) <= 0) return prev;
+      return { ...prev, [typeId]: prev[typeId] - 1 };
+    });
+    setActiveEffects(prev => ({ ...prev, [typeId]: Date.now() + 30000 })); // 30s effect
+    const type = STOP_TYPES.find(t => t.id === typeId);
+    addToast(`${type?.emoji} ${type?.label} activated! (30s)`, 'activate');
+  }
+
+  /* ===============================
 RESET
 =============================== */
 
@@ -880,6 +1080,15 @@ RESET
               speed={speed}
               resetSession={resetSession}
               wsStatus={wsStatus}
+              powerStops={powerStops}
+              inventory={inventory}
+              quests={quests}
+              activeEffects={activeEffects}
+              onCollectStop={() => { }}
+              onUseItem={useItem}
+              toasts={toasts}
+              questPanelOpen={questPanelOpen}
+              setQuestPanelOpen={setQuestPanelOpen}
             />
           }
         />
