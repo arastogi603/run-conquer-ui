@@ -91,6 +91,8 @@ function ExplorerPage({
           letterSpacing: '1px'
         }}>
           {wsStatus === 'connected' ? '● LIVE' : wsStatus === 'connecting' ? '◌ CONNECTING...' : '✕ OFFLINE'}
+          {' · '}
+          {Object.keys(players).filter(id => String(id) !== String(userId)).length} ENEMIES
         </div>
 
       </div>
