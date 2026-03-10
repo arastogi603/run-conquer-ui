@@ -790,6 +790,30 @@ PLAYER MOVEMENT
   }, [userId]);
 
   /* ===============================
+POSITION HEARTBEAT — Keep player visible to others
+=============================== */
+
+  useEffect(() => {
+    // Re-broadcast current position every 3 seconds so:
+    // 1. Stationary players (desktop) stay visible
+    // 2. New/reconnecting clients immediately see all players
+    const heartbeat = setInterval(() => {
+      if (stompClient.current?.connected && userPos) {
+        stompClient.current.publish({
+          destination: "/app/move",
+          body: JSON.stringify({
+            userId,
+            latitude: userPos[0],
+            longitude: userPos[1]
+          })
+        });
+      }
+    }, 3000);
+
+    return () => clearInterval(heartbeat);
+  }, [userId, userPos]);
+
+  /* ===============================
 RESET
 =============================== */
 
