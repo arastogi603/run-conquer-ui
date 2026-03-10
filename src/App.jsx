@@ -47,7 +47,8 @@ function ExplorerPage({
   userId,
   distance,
   speed,
-  resetSession
+  resetSession,
+  wsStatus
 }) {
 
   const territoryCount = (territories[userId] || []).length;
@@ -77,6 +78,20 @@ function ExplorerPage({
         <button className="reset-btn" onClick={resetSession}>
           ⟳ RESET
         </button>
+
+        <div className="ws-status" style={{
+          fontSize: '10px',
+          padding: '3px 8px',
+          borderRadius: '8px',
+          marginTop: '4px',
+          background: wsStatus === 'connected' ? 'rgba(0,255,100,0.2)' : 'rgba(255,60,60,0.2)',
+          color: wsStatus === 'connected' ? '#00ff64' : '#ff3c3c',
+          textAlign: 'center',
+          fontFamily: 'Orbitron, monospace',
+          letterSpacing: '1px'
+        }}>
+          {wsStatus === 'connected' ? '● LIVE' : wsStatus === 'connecting' ? '◌ CONNECTING...' : '✕ OFFLINE'}
+        </div>
 
       </div>
 
@@ -238,6 +253,7 @@ export default function App() {
   const [players, setPlayers] = useState({});
   const [distance, setDistance] = useState(0);
   const [speed, setSpeed] = useState(0);
+  const [wsStatus, setWsStatus] = useState('connecting');
 
   const stompClient = useRef(null);
   const userId = useRef(Math.floor(Math.random() * 100000)).current;
@@ -404,6 +420,7 @@ WEBSOCKET
 
     stomp.onWebSocketClose = (evt) => {
       console.warn("[WS] WebSocket closed:", evt?.reason || "no reason", "code:", evt?.code);
+      setWsStatus('disconnected');
     };
 
     stomp.onDisconnect = () => {
@@ -413,6 +430,7 @@ WEBSOCKET
     stomp.onConnect = () => {
 
       console.log("[WS] ✅ Connected! userId:", userId);
+      setWsStatus('connected');
 
       stomp.subscribe("/topic/move", msg => {
 
@@ -679,6 +697,13 @@ PLAYER MOVEMENT
 
           if (!lastGpsPos) {
             lastGpsPos = pos;
+            // Publish initial position immediately so other players can see us
+            if (stompClient.current?.connected) {
+              stompClient.current.publish({
+                destination: "/app/move",
+                body: JSON.stringify({ userId, latitude: lat, longitude: lng })
+              });
+            }
             return;
           }
 
@@ -804,6 +829,7 @@ RESET
               distance={distance}
               speed={speed}
               resetSession={resetSession}
+              wsStatus={wsStatus}
             />
           }
         />
