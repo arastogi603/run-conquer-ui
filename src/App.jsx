@@ -450,7 +450,7 @@ WEBSOCKET
         // Ignore local player from websocket to avoid trail echoing/zigzag
         if (p.userId === userId) return;
 
-        setPlayers(prev => ({ ...prev, [p.userId]: p }));
+        setPlayers(prev => ({ ...prev, [p.userId]: { ...p, lastSeen: Date.now() } }));
 
         setTrails(prevTrails => {
 
@@ -543,6 +543,30 @@ WEBSOCKET
     return () => stomp.deactivate();
 
   }, [userId]);
+
+  /* ===============================
+PLAYER CLEANUP — Remove stale players
+=============================== */
+
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      setPlayers(prev => {
+        const now = Date.now();
+        const active = {};
+        let changed = false;
+        Object.entries(prev).forEach(([id, p]) => {
+          if (now - (p.lastSeen || 0) < 10000) {
+            active[id] = p;
+          } else {
+            changed = true;
+          }
+        });
+        return changed ? active : prev;
+      });
+    }, 5000);
+
+    return () => clearInterval(cleanup);
+  }, []);
 
   /* ===============================
 PLAYER MOVEMENT
