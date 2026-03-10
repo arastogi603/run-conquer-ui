@@ -375,13 +375,44 @@ WEBSOCKET
 
   useEffect(() => {
 
-    // Use env var for WebSocket URL (set in .env and .env.production)
-    const stomp = new Client({
-      brokerURL: import.meta.env.VITE_WS_URL,
-      reconnectDelay: 5000
-    });
+    // In production, use SockJS (works through proxies/load balancers)
+    // In dev, use native WebSocket (faster, no overhead)
+    const wsUrl = import.meta.env.VITE_WS_URL;
+    const isProd = wsUrl?.startsWith("wss://");
+
+    const stompConfig = {
+      reconnectDelay: 3000,
+      heartbeatIncoming: 10000,  // Accept server heartbeats every 10s
+      heartbeatOutgoing: 10000,  // Send client heartbeats every 10s (keeps Railway proxy alive)
+    };
+
+    if (isProd) {
+      // SockJS for production (Railway proxy friendly)
+      const sockUrl = wsUrl.replace("wss://", "https://").replace("/ws/game-raw", "/ws/game");
+      console.log("[WS] Production mode — SockJS URL:", sockUrl);
+      stompConfig.webSocketFactory = () => new SockJS(sockUrl);
+    } else {
+      console.log("[WS] Dev mode — raw WS URL:", wsUrl);
+      stompConfig.brokerURL = wsUrl;
+    }
+
+    const stomp = new Client(stompConfig);
+
+    stomp.onStompError = (frame) => {
+      console.error("[WS] STOMP error:", frame.headers?.message, frame.body);
+    };
+
+    stomp.onWebSocketClose = (evt) => {
+      console.warn("[WS] WebSocket closed:", evt?.reason || "no reason", "code:", evt?.code);
+    };
+
+    stomp.onDisconnect = () => {
+      console.warn("[WS] STOMP disconnected — will reconnect in 3s");
+    };
 
     stomp.onConnect = () => {
+
+      console.log("[WS] ✅ Connected! userId:", userId);
 
       stomp.subscribe("/topic/move", msg => {
 
