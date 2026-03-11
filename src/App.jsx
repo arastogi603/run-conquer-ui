@@ -166,6 +166,24 @@ function ExplorerPage({
         })}
       </div>
 
+      {/* SPEED WARNING POPUP */}
+      {showSpeedWarning && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex',
+          justifyContent: 'center', alignItems: 'center', flexDirection: 'column'
+        }}>
+          <div style={{ fontSize: '60px', marginBottom: '20px' }}>🚗</div>
+          <h2 style={{ color: '#ff3c3c', fontFamily: 'Orbitron, monospace', textAlign: 'center' }}>TOO FAST!</h2>
+          <p style={{ color: 'white', opacity: 0.8, textAlign: 'center', padding: '0 20px', fontFamily: 'Inter, sans-serif' }}>
+            Are you in a vehicle? Trail recording has been paused.
+          </p>
+          <p style={{ color: 'white', opacity: 0.5, fontSize: '12px', marginTop: '10px' }}>
+            Slow down below 20 km/h to resume.
+          </p>
+        </div>
+      )}
+
       {/* TOAST NOTIFICATIONS */}
       <div className="toast-container">
         {toasts.map(t => (
@@ -358,6 +376,7 @@ export default function App() {
   ]);
   const [toasts, setToasts] = useState([]);
   const [questPanelOpen, setQuestPanelOpen] = useState(false);
+  const [showSpeedWarning, setShowSpeedWarning] = useState(false);
   const stopsGenerated = useRef(false);
 
   const stompClient = useRef(null);
@@ -906,9 +925,18 @@ PLAYER MOVEMENT
             // Speed from GPS coords
             const distKm = dist * 111;
             const timeHrs = 1 / 3600; // ~1 second between GPS updates
-            setSpeed(distKm / timeHrs);
+            const currentSpeed = distKm / timeHrs;
+            setSpeed(currentSpeed);
 
             lastGpsPos = pos;
+
+            // Speed Limit Check: Stop recording if moving faster than 20 km/h (running pace)
+            if (currentSpeed > 20) {
+              setShowSpeedWarning(true);
+              return;
+            } else {
+              setShowSpeedWarning(false);
+            }
 
             setTrails(prev => {
               const path = prev[userId] || [];
