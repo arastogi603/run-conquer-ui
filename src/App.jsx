@@ -58,7 +58,8 @@ function ExplorerPage({
   onUseItem,
   toasts,
   questPanelOpen,
-  setQuestPanelOpen
+  setQuestPanelOpen,
+  showSpeedWarning
 }) {
 
   const territoryCount = (territories[userId] || []).length;
@@ -1251,6 +1252,7 @@ RESET
               toasts={toasts}
               questPanelOpen={questPanelOpen}
               setQuestPanelOpen={setQuestPanelOpen}
+              showSpeedWarning={showSpeedWarning}
             />
           }
         />
