@@ -19,7 +19,7 @@ import PowerStops, { generateStopsForCell, getGridCell, getDistanceMeters, STOP_
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 
-const SIMULATION_MODE = false;
+const SIMULATION_MODE = true;
 
 /* ===============================
 MAP CENTER CONTROLLER
@@ -356,10 +356,58 @@ export default function App() {
   const stopsGenerated = useRef(false);
 
   const stompClient = useRef(null);
-  const userId = useRef(Math.floor(Math.random() * 100000)).current;
+  const userId = useRef((() => {
+    let id = localStorage.getItem('runconquer_userId');
+    if (!id) {
+      id = String(Math.floor(Math.random() * 100000));
+      localStorage.setItem('runconquer_userId', id);
+    }
+    return Number(id);
+  })()).current;
   window.localPlayerId = userId;
 
   const lastPos = useRef(null);
+
+  // Deduce API URL from the WS URL (remove /ws and change protocol)
+  const apiUrl = (import.meta.env.VITE_WS_URL || "http://localhost:8080/ws")
+    .replace("wss://", "https://")
+    .replace("ws://", "http://")
+    .replace("/ws", "");
+
+  // Helper to fetch territories from DB
+  const fetchTerritories = useCallback(() => {
+    fetch(`${apiUrl}/api/territories/all`)
+      .then(res => res.json())
+      .then(data => {
+        const loadedTerritories = {};
+        data.forEach(t => {
+          if (!loadedTerritories[t.ownerId]) {
+            loadedTerritories[t.ownerId] = [];
+          }
+          if (t.boundary && t.boundary.length >= 3) {
+            loadedTerritories[t.ownerId].push(t.boundary);
+          }
+        });
+        setTerritories(loadedTerritories);
+      })
+      .catch(err => console.error("Failed to fetch historical territories DB:", err));
+  }, [apiUrl]);
+
+  // Load existing territories from the Database on mount
+  useEffect(() => {
+    fetchTerritories();
+  }, [fetchTerritories]);
+
+  // Load existing player inventory & effects from DB on mount
+  useEffect(() => {
+    fetch(`${apiUrl}/api/player/${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        setInventory({ speed: data.speedCount, shield: data.shieldCount, double: data.doubleCount, expand: data.expandCount, xp: data.xpCount });
+        setActiveEffects({ speed: data.speedEndTime, shield: data.shieldEndTime, double: data.doubleEndTime, expand: data.expandEndTime });
+      })
+      .catch(err => console.error("Failed to fetch historical player state:", err));
+  }, [userId]);
 
   /* ===============================
 GEOMETRY & INTERSECTION
@@ -532,6 +580,12 @@ WEBSOCKET
       console.log("[WS] ✅ Connected! userId:", userId);
       setWsStatus('connected');
 
+      // Listen for global map refreshes (e.g. someone stole territories)
+      stomp.subscribe("/topic/territories/refresh", () => {
+        console.log("[WS] Another player captured territory — Refreshing map...");
+        fetchTerritories();
+      });
+
       stomp.subscribe("/topic/move", msg => {
 
         let p;
@@ -640,7 +694,7 @@ WEBSOCKET
 
     return () => stomp.deactivate();
 
-  }, [userId]);
+  }, [userId, fetchTerritories]);
 
   /* ===============================
 PLAYER CLEANUP — Remove stale players
@@ -736,6 +790,13 @@ PLAYER MOVEMENT
                 const myExisting = updatedTerritories[userId] || prevTerr[userId] || [];
                 return { ...updatedTerritories, [userId]: [...myExisting, loop, ...captured] };
               });
+
+              // --- SAVE NEW TERRITORY TO DB ---
+              fetch(`${apiUrl}/api/territories/polygon`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, polygon: loop })
+              }).catch(err => console.error("[DB] Failed to save territory:", err));
 
               return {
                 ...prev,
@@ -861,6 +922,13 @@ PLAYER MOVEMENT
                   const myExisting = updatedTerritories[userId] || prevTerr[userId] || [];
                   return { ...updatedTerritories, [userId]: [...myExisting, loop, ...captured] };
                 });
+
+                // --- SAVE NEW TERRITORY TO DB ---
+                fetch(`${apiUrl}/api/territories/polygon`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId, polygon: loop })
+                }).catch(err => console.error("Failed to save territory:", err));
 
                 return { ...prev, [userId]: [...path.slice(0, intersectIdx + 1), pos] };
               }
@@ -1003,8 +1071,16 @@ POWER-UP STOP COLLECTION
       const dist = getDistanceMeters(userPos[0], userPos[1], stop.lat, stop.lng);
       if (dist < 25) {
         collected = true;
-        // Add to inventory
+        // Optimistically Add to inventory 
         setInventory(prev => ({ ...prev, [stop.type.id]: (prev[stop.type.id] || 0) + 1 }));
+
+        // Persist collect to backend
+        fetch(`${apiUrl}/api/player/${userId}/collect/${stop.type.id}`, { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            setInventory({ speed: data.speedCount, shield: data.shieldCount, double: data.doubleCount, expand: data.expandCount, xp: data.xpCount });
+          })
+          .catch(err => console.error("Failed to collect item on backend:", err));
 
         // XP bonus is instant
         if (stop.type.id === 'xp') {
@@ -1078,9 +1154,18 @@ POWER-UP STOP COLLECTION
       if ((prev[typeId] || 0) <= 0) return prev;
       return { ...prev, [typeId]: prev[typeId] - 1 };
     });
-    setActiveEffects(prev => ({ ...prev, [typeId]: Date.now() + 30000 })); // 30s effect
+    setActiveEffects(prev => ({ ...prev, [typeId]: Date.now() + 60000 })); // Optimistic 60s effect
+
+    fetch(`${apiUrl}/api/player/${userId}/use/${typeId}`, { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        setInventory({ speed: data.speedCount, shield: data.shieldCount, double: data.doubleCount, expand: data.expandCount, xp: data.xpCount });
+        setActiveEffects({ speed: data.speedEndTime, shield: data.shieldEndTime, double: data.doubleEndTime, expand: data.expandEndTime });
+      })
+      .catch(err => console.error("Failed to use item on backend:", err));
+
     const type = STOP_TYPES.find(t => t.id === typeId);
-    addToast(`${type?.emoji} ${type?.label} activated! (30s)`, 'activate');
+    addToast(`${type?.emoji} ${type?.label} activated! (60s)`, 'activate');
   }
 
   /* ===============================
