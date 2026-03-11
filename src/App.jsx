@@ -19,7 +19,7 @@ import PowerStops, { generateStopsForCell, getGridCell, getDistanceMeters, STOP_
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 
-const SIMULATION_MODE = true;
+const SIMULATION_MODE = false;
 
 /* ===============================
 MAP CENTER CONTROLLER
@@ -81,6 +81,11 @@ function ExplorerPage({
           <div className="stat-card">
             <div className="stat-label">SPEED</div>
             <div className="stat-value">{speed.toFixed(1)}<span className="stat-unit"> KM/H</span></div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-label">CALORIES</div>
+            <div className="stat-value">{((distance / 1000) * 72.5).toFixed(0)}<span className="stat-unit"> KCAL</span></div>
           </div>
 
         </div>
