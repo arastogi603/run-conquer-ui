@@ -392,6 +392,8 @@ export default function App() {
   window.localPlayerId = userId;
 
   const lastPos = useRef(null);
+  const lastGpsTime = useRef(null);
+  const speedFilter = useRef(0);
 
   // Deduce API URL from the WS URL (remove /ws and change protocol)
   const apiUrl = (import.meta.env.VITE_WS_URL || "http://localhost:8080/ws")
@@ -923,16 +925,28 @@ PLAYER MOVEMENT
           );
 
           if (dist > 0.00005) { // ~5.5 meters for real GPS
-            // Speed from GPS coords
-            const distKm = dist * 111;
-            const timeHrs = 1 / 3600; // ~1 second between GPS updates
-            const currentSpeed = distKm / timeHrs;
-            setSpeed(currentSpeed);
-
+            const now = Date.now();
+            const distMeters = getDistanceMeters(lastGpsPos[0], lastGpsPos[1], pos[0], pos[1]);
+            const timeElapsedMs = lastGpsTime.current ? (now - lastGpsTime.current) : 1000;
+            const timeHrs = timeElapsedMs / 3600000;
+            const distKm = distMeters / 1000;
+            
+            const rawSpeed = distKm / timeHrs;
+            
+            // Simple Exponential Moving Average (EMA) to smooth out GPS jitter
+            // alpha = 0.3 (lower is smoother but slower to react)
+            const alpha = 0.3;
+            const smoothedSpeed = lastGpsTime.current 
+              ? (alpha * rawSpeed + (1 - alpha) * speedFilter.current)
+              : rawSpeed;
+            
+            speedFilter.current = smoothedSpeed;
+            setSpeed(smoothedSpeed);
+            lastGpsTime.current = now;
             lastGpsPos = pos;
 
             // Speed Limit Check: Stop recording if moving faster than 20 km/h (running pace)
-            if (currentSpeed > 20) {
+            if (smoothedSpeed > 20) {
               setShowSpeedWarning(true);
               return;
             } else {
