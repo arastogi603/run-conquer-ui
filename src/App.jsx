@@ -569,7 +569,7 @@ WEBSOCKET
     // In production, use SockJS (works through proxies/load balancers)
     // In dev, use native WebSocket (faster, no overhead)
     const wsUrl = import.meta.env.VITE_WS_URL;
-    const isProd = wsUrl?.startsWith("wss://");
+    
 
     const stompConfig = {
       reconnectDelay: 3000,
@@ -577,15 +577,20 @@ WEBSOCKET
       heartbeatOutgoing: 10000,  // Send client heartbeats every 10s (keeps Railway proxy alive)
     };
 
-    if (isProd) {
-      // SockJS for production (Railway proxy friendly)
-      const sockUrl = wsUrl.replace("wss://", "https://").replace("/ws/game-raw", "/ws/game");
-      console.log("[WS] Production mode — SockJS URL:", sockUrl);
-      stompConfig.webSocketFactory = () => new SockJS(sockUrl);
-    } else {
-      console.log("[WS] Dev mode — raw WS URL:", wsUrl);
-      stompConfig.brokerURL = wsUrl;
-    }
+    const wsUrl = import.meta.env.VITE_WS_URL;
+
+console.log("[WS] Using SockJS URL:", wsUrl);
+
+const stomp = new Client({
+  webSocketFactory: () => new SockJS(wsUrl),
+
+  reconnectDelay: 3000,
+
+  heartbeatIncoming: 10000,
+  heartbeatOutgoing: 10000,
+
+  debug: (str) => console.log("[STOMP]", str),
+});
 
     const stomp = new Client(stompConfig);
 
