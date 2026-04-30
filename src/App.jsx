@@ -396,10 +396,7 @@ export default function App() {
   const speedFilter = useRef(0);
 
   // Deduce API URL from the WS URL (remove /ws and change protocol)
-  const apiUrl = (import.meta.env.VITE_WS_URL || "http://localhost:8080/ws")
-    .replace("wss://", "https://")
-    .replace("ws://", "http://")
-    .replace("/ws", "");
+  const apiUrl = import.meta.env.VITE_API_URL;
 
   // Helper to fetch territories from DB
   const fetchTerritories = useCallback(() => {
@@ -569,15 +566,6 @@ WEBSOCKET
     // In production, use SockJS (works through proxies/load balancers)
     // In dev, use native WebSocket (faster, no overhead)
     const wsUrl = import.meta.env.VITE_WS_URL;
-    
-
-    const stompConfig = {
-      reconnectDelay: 3000,
-      heartbeatIncoming: 10000,  // Accept server heartbeats every 10s
-      heartbeatOutgoing: 10000,  // Send client heartbeats every 10s (keeps Railway proxy alive)
-    };
-
-    const wsUrl = import.meta.env.VITE_WS_URL;
 
 console.log("[WS] Using SockJS URL:", wsUrl);
 
@@ -591,8 +579,6 @@ const stomp = new Client({
 
   debug: (str) => console.log("[STOMP]", str),
 });
-
-    const stomp = new Client(stompConfig);
 
     stomp.onStompError = (frame) => {
       console.error("[WS] STOMP error:", frame.headers?.message, frame.body);
